@@ -31,9 +31,12 @@ FIND_T_PARAM = re.compile("swfArgs.*\"t\": \"([^\"]+)\"")
 
 class TwitterConnection(object):
 
-    def get_search_tweets(self, term):
+    def get_search_tweets(self, term, since=None):
         print term
         this_url = "%s?rpp=100&q=%s" % (TWITTER_SEARCH_URL, quote(term))
+        if since:
+            this_url = "%s?since_id=%s" % (this_url, since)
+
         dfr = getPage(this_url)
         dfr.addCallback(decode_json)
         return dfr
@@ -56,13 +59,25 @@ class Twotem(totem.Plugin):
         self.con = TwitterConnection()
         self.expander = UrlExpander()
         self.results = []
+        self.refresh_time = 60 # in seconds
         gobject.idle_add(reactor.run)
 
     def activate(self, totem):
-        first_update = self.con.get_search_tweets("cool+youtube")
+        self.my_totem = totem
+        self.since_tweet = 0
+        self._perform_update()
+        print "Active"
+
+    def _perform_update(self):
+        first_update = self.con.get_search_tweets("cool+youtube", since=self.since_tweet)
         first_update.addCallback(self._got_tweets)
         first_update.addErrback(self._log_error)
-        print "Active"
+        first_update.addCallback(self._enqueue_updates_later)
+
+    def _enqueue_updates_later(self, result):
+        # call again later
+        reactor.callLater(self.refresh_time, self._perform_update)
+        return result
 
     def _log_error(self, error):
         print "got Error", error
@@ -71,6 +86,13 @@ class Twotem(totem.Plugin):
         print "got smth"
         results = search_results['results']
         print "got %s results" % len(results)
+
+        try:
+            self.since_tweet = results[0]['id']
+        except IndexError:
+            # we don't even have one tweet :(
+            return
+
         actually_links = []
         for tweet in results:
             if 'http://' in tweet['text']:
@@ -119,6 +141,7 @@ class Twotem(totem.Plugin):
 
     def _add_link(self, link, text):
         print "adding", link, text
+        self.my_totem.action_remote(totem.REMOTE_COMMAND_ENQUEUE, link)
 
 
     def deactivate(self, totem):
