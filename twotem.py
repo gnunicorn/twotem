@@ -147,6 +147,7 @@ class Twotem(totem.Plugin):
 
     def _add_link(self, link, text):
         print "adding", link, text
+        # FIXME: how could I set the text as the name for the link when?
         self.my_totem.action_remote(totem.REMOTE_COMMAND_ENQUEUE, link)
 
 
