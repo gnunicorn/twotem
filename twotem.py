@@ -31,11 +31,15 @@ FIND_T_PARAM = re.compile("swfArgs.*\"t\": \"([^\"]+)\"")
 
 class TwitterConnection(object):
 
+    PER_PAGE = 20
+
     def get_search_tweets(self, term, since=None):
-        print term
-        this_url = "%s?rpp=100&q=%s" % (TWITTER_SEARCH_URL, quote(term))
+        this_url = "%s?rpp=%d&q=%s" % (TWITTER_SEARCH_URL,
+                self.PER_PAGE, quote(term))
         if since:
-            this_url = "%s?since_id=%s" % (this_url, since)
+            this_url = "%s&since_id=%d" % (this_url, since)
+
+        print "asking for '%s'" % this_url
 
         dfr = getPage(this_url)
         dfr.addCallback(decode_json)
@@ -60,6 +64,7 @@ class Twotem(totem.Plugin):
         self.expander = UrlExpander()
         self.results = []
         self.refresh_time = 60 # in seconds
+        self.fmt = "fmt=18" # or ''
         gobject.idle_add(reactor.run)
 
     def activate(self, totem):
@@ -69,7 +74,8 @@ class Twotem(totem.Plugin):
         print "Active"
 
     def _perform_update(self):
-        first_update = self.con.get_search_tweets("cool+youtube", since=self.since_tweet)
+        #first_update = self.con.get_search_tweets("cool+youtube", since=self.since_tweet)
+        first_update = self.con.get_search_tweets("youtube+http", since=self.since_tweet)
         first_update.addCallback(self._got_tweets)
         first_update.addErrback(self._log_error)
         first_update.addCallback(self._enqueue_updates_later)
@@ -135,8 +141,8 @@ class Twotem(totem.Plugin):
     def _find_param(self, data, youtube_id):
         print "trying to find param", youtube_id
         t_param = FIND_T_PARAM.search(data).group(1)
-        return "http://www.youtube.com/get_video?video_id=%s&t=%s" % (
-                youtube_id, t_param)
+        return "http://www.youtube.com/get_video?video_id=%s&t=%s&%s" % (
+                youtube_id, t_param, self.fmt)
 
 
     def _add_link(self, link, text):
